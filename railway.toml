@@ -1,7 +1,8 @@
 [build]
-buildCommand = "npm install && prisma migrate deploy && next build"
+buildCommand = "npm install && next build"
 
 [deploy]
+preDeployCommand = "prisma migrate deploy"
 startCommand = "npm start"
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 3
