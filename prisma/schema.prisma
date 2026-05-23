@@ -1,0 +1,1060 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// ENUMS
+// ============================================
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  REVIEWER
+  AI_TRAINER
+  USER
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  PENDING_VERIFICATION
+}
+
+enum QuestionType {
+  MULTIPLE_CHOICE
+  SINGLE_CHOICE
+  TEXT_SHORT
+  TEXT_LONG
+  ESSAY
+  IMAGE_BASED
+  AUDIO_QUESTION
+  VIDEO_QUESTION
+  FILE_UPLOAD
+  CODE_EDITOR
+  RATING_SCALE
+  SLIDER
+  DRAG_DROP_RANKING
+  MATCH_FOLLOWING
+  AI_CONVERSATION
+  VOICE_RECORDING
+  TIMED_QUESTION
+  PERSONALITY_ASSESSMENT
+  SITUATIONAL_JUDGMENT
+  INTERACTIVE_SCENARIO
+  ANNOTATION_TASK
+  RLHF_TASK
+  COMPARATIVE_RANKING
+  DATA_LABELING
+  TRANSLATION_TASK
+  SENTIMENT_CLASSIFICATION
+  CAPTCHA_VALIDATION
+  DYNAMIC_BRANCHING
+}
+
+enum QuestionnaireStatus {
+  DRAFT
+  REVIEW
+  PUBLISHED
+  ARCHIVED
+  PAUSED
+}
+
+enum ResponseStatus {
+  IN_PROGRESS
+  COMPLETED
+  ABANDONED
+  FLAGGED
+  APPROVED
+  REJECTED
+}
+
+enum AIEvaluationStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  NEEDS_REVIEW
+}
+
+enum NotificationType {
+  ACHIEVEMENT
+  LEVEL_UP
+  REMINDER
+  SYSTEM
+  REWARD
+  REVIEW_COMPLETE
+  NEW_QUESTIONNAIRE
+  TEAM_INVITE
+  MODERATION_FLAG
+}
+
+enum PlanType {
+  FREE
+  STARTER
+  PRO
+  ENTERPRISE
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  LOGIN
+  LOGOUT
+  EXPORT
+  IMPORT
+  PUBLISH
+  ARCHIVE
+  APPROVE
+  REJECT
+  FLAG
+  SUSPEND
+  ACTIVATE
+}
+
+enum DatasetStatus {
+  COLLECTING
+  PROCESSING
+  READY
+  EXPORTED
+  ARCHIVED
+}
+
+enum BadgeCategory {
+  STREAK
+  COMPLETION
+  QUALITY
+  SPEED
+  MILESTONE
+  SPECIAL
+  EXPERTISE
+}
+
+// ============================================
+// AUTHENTICATION
+// ============================================
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ============================================
+// USERS & PROFILES
+// ============================================
+
+model User {
+  id              String     @id @default(cuid())
+  name            String?
+  email           String?    @unique
+  emailVerified   DateTime?
+  image           String?
+  password        String?
+  role            UserRole   @default(USER)
+  status          UserStatus @default(PENDING_VERIFICATION)
+  plan            PlanType   @default(FREE)
+
+  // Profile
+  bio             String?    @db.Text
+  location        String?
+  website         String?
+  timezone        String?    @default("UTC")
+  language        String?    @default("en")
+
+  // Gamification
+  xpPoints        Int        @default(0)
+  level           Int        @default(1)
+  streakDays      Int        @default(0)
+  lastActiveAt    DateTime?
+  streakLastDate  DateTime?
+
+  // Stats
+  totalResponses  Int        @default(0)
+  completedQuestionnaires Int @default(0)
+  avgQualityScore Float?
+  qualificationReadiness Float @default(0)
+  primaryTrack    String?
+
+  // Settings
+  notificationsEnabled Boolean @default(true)
+  emailNotifications   Boolean @default(true)
+  darkMode             Boolean @default(false)
+
+  // Metadata
+  onboardingCompleted Boolean  @default(false)
+  onboardingStep      Int      @default(0)
+  referralCode        String?  @unique @default(cuid())
+  referredBy          String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  accounts              Account[]
+  sessions              Session[]
+  responses             Response[]
+  questionnairesCreated Questionnaire[]     @relation("QuestionnaireAuthor")
+  userAchievements      UserAchievement[]
+  notifications         Notification[]
+  auditLogs             AuditLog[]
+  teamMemberships       TeamMember[]
+  aiEvaluations         AIEvaluation[]      @relation("EvaluatorUser")
+  userInterests         UserInterest[]
+  userSkills            UserSkill[]
+  magicLinks            MagicLink[]
+  datasets              Dataset[]           @relation("DatasetOwner")
+  leaderboardEntries    LeaderboardEntry[]
+  taskAttempts          TaskAttempt[]
+  trackProgress         UserTrackProgress[]
+  examAttempts          ExamAttempt[]
+
+  @@index([email])
+  @@index([role])
+  @@index([xpPoints])
+  @@index([createdAt])
+}
+
+model MagicLink {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  email     String
+  userId    String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([email])
+}
+
+model UserInterest {
+  id         String @id @default(cuid())
+  userId     String
+  category   String
+  subcategory String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, category])
+  @@index([userId])
+}
+
+model UserSkill {
+  id         String @id @default(cuid())
+  userId     String
+  skill      String
+  level      Int    @default(1)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, skill])
+  @@index([userId])
+}
+
+// ============================================
+// TEAMS
+// ============================================
+
+model Team {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String?  @db.Text
+  logoUrl     String?
+  ownerId     String
+  planType    PlanType @default(FREE)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  members        TeamMember[]
+  questionnaires Questionnaire[]
+  datasets       Dataset[]
+
+  @@index([slug])
+}
+
+model TeamMember {
+  id     String   @id @default(cuid())
+  teamId String
+  userId String
+  role   UserRole @default(USER)
+
+  joinedAt  DateTime @default(now())
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, userId])
+  @@index([teamId])
+  @@index([userId])
+}
+
+// ============================================
+// QUESTIONNAIRES
+// ============================================
+
+model Questionnaire {
+  id              String              @id @default(cuid())
+  title           String
+  description     String?             @db.Text
+  slug            String              @unique
+  status          QuestionnaireStatus @default(DRAFT)
+
+  // Config
+  isPublic        Boolean  @default(false)
+  requireAuth     Boolean  @default(true)
+  allowAnonymous  Boolean  @default(false)
+  randomizeOrder  Boolean  @default(false)
+  showProgress    Boolean  @default(true)
+  allowResume     Boolean  @default(true)
+
+  // Timing
+  timeLimit       Int?     // in seconds, null = no limit
+  estimatedTime   Int?     // estimated completion time in minutes
+
+  // Limits
+  maxResponses    Int?
+  maxAttempts     Int?     @default(1)
+
+  // AI Config
+  aiEnabled       Boolean  @default(false)
+  aiModel         String?
+  aiSystemPrompt  String?  @db.Text
+  adaptiveEnabled Boolean  @default(false)
+
+  // Rewards
+  xpReward        Int      @default(10)
+
+  // Categorization
+  category        String?
+  tags            String[]
+  difficulty      Int      @default(1)  // 1-5
+
+  // Branding
+  coverImage      String?
+  primaryColor    String?
+
+  // Author
+  authorId        String
+  teamId          String?
+
+  // Stats (cached)
+  totalResponses  Int      @default(0)
+  completionRate  Float?
+  avgCompletionTime Int?
+  avgQualityScore Float?
+
+  publishedAt     DateTime?
+  archivedAt      DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  author         User             @relation("QuestionnaireAuthor", fields: [authorId], references: [id])
+  team           Team?            @relation(fields: [teamId], references: [id])
+  questions      Question[]
+  responses      Response[]
+  datasets       Dataset[]
+  flowLogics     FlowLogic[]
+  analyticsData  Analytics[]
+
+  @@index([authorId])
+  @@index([status])
+  @@index([category])
+  @@index([slug])
+  @@index([createdAt])
+}
+
+// ============================================
+// QUESTIONS
+// ============================================
+
+model Question {
+  id              String       @id @default(cuid())
+  questionnaireId String
+
+  type            QuestionType
+  order           Int
+
+  // Content
+  title           String       @db.Text
+  description     String?      @db.Text
+  placeholder     String?
+  helperText      String?      @db.Text
+
+  // Rich content
+  imageUrl        String?
+  videoUrl        String?
+  audioUrl        String?
+  codeSnippet     String?      @db.Text
+  codeLanguage    String?
+
+  // Configuration
+  isRequired      Boolean      @default(true)
+  isAIGenerated   Boolean      @default(false)
+  allowMultiple   Boolean      @default(false)
+
+  // Timing
+  timeLimit       Int?         // in seconds
+
+  // Answer config
+  minLength       Int?
+  maxLength       Int?
+  minValue        Float?
+  maxValue        Float?
+
+  // Options (for choice questions) - stored as JSON
+  options         Json?        // QuestionOption[]
+
+  // Scoring
+  scoringEnabled  Boolean      @default(false)
+  correctAnswer   Json?        // depends on question type
+  maxScore        Float?
+
+  // AI config
+  aiScoringPrompt String?      @db.Text
+  aiFollowUp      Boolean      @default(false)
+
+  // Branching
+  branchingRules  Json?        // BranchingRule[]
+
+  // Metadata
+  tags            String[]
+  aiTags          String[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  questionnaire  Questionnaire   @relation(fields: [questionnaireId], references: [id], onDelete: Cascade)
+  answers        Answer[]
+  flowLogicsFrom FlowLogic[]     @relation("FlowFrom")
+  flowLogicsTo   FlowLogic[]     @relation("FlowTo")
+
+  @@index([questionnaireId])
+  @@index([type])
+  @@index([order])
+}
+
+model FlowLogic {
+  id              String @id @default(cuid())
+  questionnaireId String
+  fromQuestionId  String
+  toQuestionId    String?
+
+  // Condition
+  condition       Json   // FlowCondition
+  action          String // "jump", "skip", "end", "show"
+
+  order Int @default(0)
+
+  questionnaire Questionnaire @relation(fields: [questionnaireId], references: [id], onDelete: Cascade)
+  fromQuestion  Question      @relation("FlowFrom", fields: [fromQuestionId], references: [id], onDelete: Cascade)
+  toQuestion    Question?     @relation("FlowTo", fields: [toQuestionId], references: [id])
+
+  @@index([questionnaireId])
+  @@index([fromQuestionId])
+}
+
+// ============================================
+// RESPONSES & ANSWERS
+// ============================================
+
+model Response {
+  id              String         @id @default(cuid())
+  questionnaireId String
+  userId          String?
+
+  status          ResponseStatus @default(IN_PROGRESS)
+
+  // Session
+  sessionId       String?
+  ipAddress       String?
+  userAgent       String?
+
+  // Timing
+  startedAt       DateTime       @default(now())
+  completedAt     DateTime?
+  timeSpentSeconds Int?
+
+  // Progress
+  currentQuestionIndex Int       @default(0)
+  totalQuestions       Int       @default(0)
+
+  // Scoring
+  totalScore      Float?
+  maxPossibleScore Float?
+  qualityScore    Float?         // 0-100, AI assessed
+
+  // Metadata
+  metadata        Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  questionnaire Questionnaire  @relation(fields: [questionnaireId], references: [id], onDelete: Cascade)
+  user          User?          @relation(fields: [userId], references: [id])
+  answers       Answer[]
+  aiEvaluation  AIEvaluation?
+
+  @@index([questionnaireId])
+  @@index([userId])
+  @@index([status])
+  @@index([startedAt])
+}
+
+model Answer {
+  id         String   @id @default(cuid())
+  responseId String
+  questionId String
+
+  // Answer content - flexible storage
+  textValue      String?   @db.Text
+  numericValue   Float?
+  booleanValue   Boolean?
+  arrayValue     String[]
+  jsonValue      Json?     // for complex answers
+  fileUrls       String[]
+
+  // For audio/video
+  mediaUrl       String?
+  mediaDuration  Int?
+  mediaTranscript String? @db.Text
+
+  // For code editor
+  codeValue      String?  @db.Text
+  codeLanguage   String?
+  codeOutput     String?  @db.Text
+
+  // Timing
+  timeSpentSeconds Int?
+
+  // Scoring
+  score          Float?
+  maxScore       Float?
+  isCorrect      Boolean?
+
+  // AI Analysis
+  aiScore        Float?
+  aiConfidence   Float?
+  aiTags         String[]
+  aiSummary      String?  @db.Text
+
+  // Moderation
+  flagged        Boolean  @default(false)
+  flagReason     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  response  Response @relation(fields: [responseId], references: [id], onDelete: Cascade)
+  question  Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@index([responseId])
+  @@index([questionId])
+  @@index([flagged])
+}
+
+// ============================================
+// AI EVALUATIONS
+// ============================================
+
+model AIEvaluation {
+  id         String             @id @default(cuid())
+  responseId String             @unique
+
+  status     AIEvaluationStatus @default(PENDING)
+
+  // Scores
+  overallScore    Float?
+  coherenceScore  Float?
+  relevanceScore  Float?
+  depthScore      Float?
+  toxicityScore   Float?
+
+  // Analysis
+  summary         String?  @db.Text
+  strengths       String[]
+  weaknesses      String[]
+  suggestions     String[]
+  tags            String[]
+
+  // Metadata
+  modelUsed       String?
+  tokensUsed      Int?
+  processingTime  Int?    // milliseconds
+
+  // Human review
+  reviewerId      String?
+  humanScore      Float?
+  humanNotes      String? @db.Text
+  humanReviewedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  response Response @relation(fields: [responseId], references: [id], onDelete: Cascade)
+  reviewer User?    @relation("EvaluatorUser", fields: [reviewerId], references: [id])
+
+  @@index([status])
+  @@index([responseId])
+}
+
+// ============================================
+// GAMIFICATION
+// ============================================
+
+model Achievement {
+  id          String        @id @default(cuid())
+  name        String        @unique
+  title       String
+  description String        @db.Text
+  icon        String
+  category    BadgeCategory
+
+  // Requirements
+  requirement Json          // AchievementRequirement
+  xpReward    Int           @default(0)
+
+  rarity      String        @default("common") // common, rare, epic, legendary
+  isActive    Boolean       @default(true)
+
+  createdAt DateTime @default(now())
+
+  userAchievements UserAchievement[]
+}
+
+model UserAchievement {
+  id            String   @id @default(cuid())
+  userId        String
+  achievementId String
+
+  unlockedAt    DateTime @default(now())
+  progress      Float    @default(0)  // 0-100
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievement Achievement @relation(fields: [achievementId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, achievementId])
+  @@index([userId])
+  @@index([achievementId])
+}
+
+model LeaderboardEntry {
+  id         String @id @default(cuid())
+  userId     String
+  period     String  // "daily", "weekly", "monthly", "all-time"
+  periodKey  String  // e.g., "2024-W01", "2024-01", "all-time"
+
+  xpPoints   Int    @default(0)
+  rank       Int?
+  responses  Int    @default(0)
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, period, periodKey])
+  @@index([period, periodKey, xpPoints])
+}
+
+// ============================================
+// NOTIFICATIONS
+// ============================================
+
+model Notification {
+  id      String           @id @default(cuid())
+  userId  String
+  type    NotificationType
+
+  title   String
+  body    String           @db.Text
+
+  data    Json?
+  link    String?
+
+  isRead  Boolean @default(false)
+  readAt  DateTime?
+
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([isRead])
+  @@index([createdAt])
+}
+
+// ============================================
+// DATASETS
+// ============================================
+
+model Dataset {
+  id              String        @id @default(cuid())
+  name            String
+  description     String?       @db.Text
+  status          DatasetStatus @default(COLLECTING)
+
+  questionnaireId String
+  ownerId         String
+  teamId          String?
+
+  // Stats
+  totalEntries    Int     @default(0)
+  qualityThreshold Float? @default(0.7)
+
+  // Export config
+  format          String  @default("jsonl")
+  exportUrl       String?
+  lastExportedAt  DateTime?
+
+  // Metadata
+  tags            String[]
+  version         Int     @default(1)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  questionnaire Questionnaire @relation(fields: [questionnaireId], references: [id])
+  owner         User          @relation("DatasetOwner", fields: [ownerId], references: [id])
+  team          Team?         @relation(fields: [teamId], references: [id])
+
+  @@index([ownerId])
+  @@index([status])
+  @@index([questionnaireId])
+}
+
+// ============================================
+// ANALYTICS
+// ============================================
+
+model Analytics {
+  id              String @id @default(cuid())
+  questionnaireId String
+
+  // Aggregate stats
+  date            DateTime @db.Date
+
+  totalViews      Int @default(0)
+  totalStarts     Int @default(0)
+  totalCompleted  Int @default(0)
+
+  avgCompletionTime Int?
+  avgQualityScore Float?
+
+  // Drop-off by question index
+  dropOffData     Json?
+
+  // Device breakdown
+  mobileCount     Int @default(0)
+  desktopCount    Int @default(0)
+  tabletCount     Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  questionnaire Questionnaire @relation(fields: [questionnaireId], references: [id], onDelete: Cascade)
+
+  @@unique([questionnaireId, date])
+  @@index([questionnaireId])
+  @@index([date])
+}
+
+// ============================================
+// AUDIT LOGS
+// ============================================
+
+model AuditLog {
+  id         String      @id @default(cuid())
+  userId     String?
+  action     AuditAction
+  resource   String      // e.g., "questionnaire", "user", "response"
+  resourceId String?
+
+  oldData    Json?
+  newData    Json?
+
+  ipAddress  String?
+  userAgent  String?
+
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([action])
+  @@index([resource])
+  @@index([createdAt])
+}
+
+// ============================================
+// QUESTION TEMPLATES
+// ============================================
+
+model QuestionTemplate {
+  id          String       @id @default(cuid())
+  title       String
+  description String?      @db.Text
+  type        QuestionType
+  category    String
+
+  content     Json         // Full question config
+
+  isPublic    Boolean      @default(true)
+  useCount    Int          @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([type])
+  @@index([category])
+  @@index([useCount])
+}
+
+// ============================================
+// AI TRAINER PRACTICE PLATFORM
+// ============================================
+
+enum TaskType {
+  COMPARE_RESPONSES
+  RATE_QUALITY
+  IDENTIFY_ISSUES
+  IMPROVE_RESPONSE
+  RANK_OUTPUTS
+  ANNOTATE_TEXT
+  FACTUAL_CHECK
+  SENTIMENT_LABEL
+  TOXICITY_DETECTION
+  PROMPT_ENGINEERING
+  MULTIPLE_CHOICE
+  FREE_RESPONSE
+  CODE_REVIEW
+  CONVERSATION_EVAL
+  BIAS_DETECTION
+}
+
+enum ExamStatus {
+  IN_PROGRESS
+  COMPLETED
+  ABANDONED
+  TIMED_OUT
+}
+
+model TrainingTrack {
+  id          String  @id @default(cuid())
+  slug        String  @unique
+  name        String
+  description String  @db.Text
+  longDesc    String? @db.Text
+  icon        String
+  color       String
+  difficulty  Int     @default(1)
+  order       Int     @default(0)
+  isActive    Boolean @default(true)
+  totalTasks  Int     @default(0)
+  estimatedHours Int  @default(5)
+  skills      String[]
+  companies   String[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tasks    PracticeTask[]
+  progress UserTrackProgress[]
+  exams    QualificationExam[]
+
+  @@index([slug])
+  @@index([order])
+}
+
+model PracticeTask {
+  id           String   @id @default(cuid())
+  trackId      String
+  title        String
+  description  String?  @db.Text
+  instructions String   @db.Text
+  taskType     TaskType
+  difficulty   Int      @default(1)
+  xpReward     Int      @default(10)
+  timeLimit    Int?
+  order        Int      @default(0)
+  isActive     Boolean  @default(true)
+  isPremium    Boolean  @default(false)
+
+  content  Json
+  rubric   Json?
+  hints    String[]
+  tags     String[]
+
+  totalAttempts    Int   @default(0)
+  avgScore         Float @default(0)
+  completionRate   Float @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  track    TrainingTrack @relation(fields: [trackId], references: [id])
+  attempts TaskAttempt[]
+
+  @@index([trackId])
+  @@index([difficulty])
+  @@index([taskType])
+}
+
+model TaskAttempt {
+  id        String @id @default(cuid())
+  userId    String
+  taskId    String
+  examAttemptId String?
+
+  answer    Json
+  timeSpent Int
+
+  score        Float?
+  feedback     String?  @db.Text
+  explanation  String?  @db.Text
+  strengths    String[]
+  improvements String[]
+  isCorrect    Boolean?
+  aiGraded     Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+
+  user        User        @relation(fields: [userId], references: [id])
+  task        PracticeTask @relation(fields: [taskId], references: [id])
+  examAttempt ExamAttempt? @relation(fields: [examAttemptId], references: [id])
+
+  @@index([userId])
+  @@index([taskId])
+  @@index([examAttemptId])
+}
+
+model UserTrackProgress {
+  id             String @id @default(cuid())
+  userId         String
+  trackId        String
+  tasksCompleted Int    @default(0)
+  tasksAttempted Int    @default(0)
+  avgScore       Float  @default(0)
+  masteryLevel   Int    @default(0)
+  lastPracticed  DateTime?
+
+  user  User          @relation(fields: [userId], references: [id])
+  track TrainingTrack @relation(fields: [trackId], references: [id])
+
+  @@unique([userId, trackId])
+  @@index([userId])
+}
+
+model QualificationExam {
+  id           String  @id @default(cuid())
+  trackId      String
+  title        String
+  description  String  @db.Text
+  timeLimit    Int
+  passingScore Float   @default(70)
+  maxAttempts  Int     @default(3)
+  difficulty   Int     @default(3)
+  isActive     Boolean @default(true)
+  questions    Json
+
+  totalAttempts Int   @default(0)
+  passRate      Float @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  track    TrainingTrack @relation(fields: [trackId], references: [id])
+  attempts ExamAttempt[]
+
+  @@index([trackId])
+}
+
+model ExamAttempt {
+  id       String     @id @default(cuid())
+  userId   String
+  examId   String
+  status   ExamStatus @default(IN_PROGRESS)
+  answers  Json       @default("{}")
+  currentQuestion Int @default(0)
+  score       Float?
+  passed      Boolean?
+  feedback    String?  @db.Text
+  startedAt   DateTime @default(now())
+  completedAt DateTime?
+  timeSpent   Int?
+
+  user         User              @relation(fields: [userId], references: [id])
+  exam         QualificationExam @relation(fields: [examId], references: [id])
+  taskAttempts TaskAttempt[]
+
+  @@index([userId])
+  @@index([examId])
+}
+
+// ============================================
+// SUBSCRIPTIONS / BILLING
+// ============================================
+
+model Subscription {
+  id               String   @id @default(cuid())
+  userId           String   @unique
+
+  stripeCustomerId    String? @unique
+  stripeSubscriptionId String? @unique
+  stripePriceId     String?
+
+  plan             PlanType @default(FREE)
+  status           String   @default("active")
+
+  currentPeriodStart DateTime?
+  currentPeriodEnd   DateTime?
+  cancelAtPeriodEnd  Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([stripeCustomerId])
+}
