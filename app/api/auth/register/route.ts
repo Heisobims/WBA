@@ -3,6 +3,9 @@ import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
 import { z } from "zod";
 import { generateUniqueSlug } from "@/lib/utils";
+import { rateLimit } from "@/lib/rate-limit";
+
+const limiter = rateLimit("auth");
 
 const schema = z.object({
   name: z.string().min(2).max(50),
@@ -11,6 +14,9 @@ const schema = z.object({
 });
 
 export async function POST(req: NextRequest) {
+  const rateLimitResult = await limiter(req);
+  if (rateLimitResult instanceof NextResponse) return rateLimitResult;
+
   try {
     const body = await req.json();
     const { name, email, password } = schema.parse(body);

@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: "Invalid request" }, { status: 400 });
     }
-    console.error("[AI generate-questions]", error);
+    console.error("[AI generate-questions]", JSON.stringify(error, null, 2));
     return NextResponse.json(
       { error: "AI generation failed. Check your OpenAI API key." },
       { status: 500 },

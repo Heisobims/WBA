@@ -8,16 +8,22 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { examId, answers, score, passed, timeSpent, questionResults } = body;
+    const { examId, answers, score, timeSpent } = body;
 
     if (!examId || score === undefined) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
+    // Clamp score to 0-100 — never trust raw client value
+    const safeScore = Math.min(100, Math.max(0, Number(score) || 0));
+
     // Look up DB exam (may not exist if using static data)
     const exam = await db.qualificationExam.findFirst({
       where: { OR: [{ id: examId }, { title: { contains: examId } }] },
     }).catch(() => null);
+
+    // Calculate passed server-side from DB passingScore
+    const serverPassed = safeScore >= (exam?.passingScore ?? 70);
 
     let attempt;
     if (exam) {
@@ -25,8 +31,8 @@ export async function POST(req: NextRequest) {
         data: {
           userId: session.user.id,
           examId: exam.id,
-          score,
-          passed: passed ?? score >= (exam.passingScore ?? 70),
+          score: safeScore,
+          passed: serverPassed,
           timeSpent: timeSpent ?? 0,
           status: "COMPLETED",
           answers: answers ? JSON.parse(JSON.stringify(answers)) : {},
@@ -35,8 +41,8 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Award XP for completing exam
-    const xpEarned = passed ? 100 : 25;
+    // Award XP based on server-calculated result
+    const xpEarned = serverPassed ? 100 : 25;
     await db.user.update({
       where: { id: session.user.id },
       data: { xpPoints: { increment: xpEarned } },

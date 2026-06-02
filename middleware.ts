@@ -6,7 +6,7 @@ const { auth } = NextAuth(authConfig);
 
 const PUBLIC_ROUTES = ["/", "/features", "/pricing", "/docs", "/contact", "/login", "/register", "/forgot-password", "/verify"];
 const ADMIN_ROUTES = ["/admin"];
-const ADMIN_ROLES = ["SUPER_ADMIN", "ADMIN"];
+const ADMIN_ROLES = ["SUPER_ADMIN", "ADMIN", "REVIEWER"];
 
 export default auth((req) => {
   const { nextUrl } = req;

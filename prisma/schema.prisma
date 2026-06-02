@@ -756,7 +756,7 @@ model Dataset {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  questionnaire Questionnaire @relation(fields: [questionnaireId], references: [id])
+  questionnaire Questionnaire @relation(fields: [questionnaireId], references: [id], onDelete: Cascade)
   owner         User          @relation("DatasetOwner", fields: [ownerId], references: [id])
   team          Team?         @relation(fields: [teamId], references: [id])
 
@@ -820,7 +820,7 @@ model AuditLog {
 
   createdAt DateTime @default(now())
 
-  user User? @relation(fields: [userId], references: [id])
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([action])
@@ -934,7 +934,7 @@ model PracticeTask {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  track    TrainingTrack @relation(fields: [trackId], references: [id])
+  track    TrainingTrack @relation(fields: [trackId], references: [id], onDelete: Cascade)
   attempts TaskAttempt[]
 
   @@index([trackId])
@@ -1005,7 +1005,7 @@ model QualificationExam {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  track    TrainingTrack @relation(fields: [trackId], references: [id])
+  track    TrainingTrack @relation(fields: [trackId], references: [id], onDelete: Cascade)
   attempts ExamAttempt[]
 
   @@index([trackId])

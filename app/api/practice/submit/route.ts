@@ -8,11 +8,16 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { taskId, answer, score, timeSpent, xpEarned, correct } = body;
+    const { taskId, answer, score, timeSpent } = body;
 
     if (!taskId || score === undefined) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
+
+    // Clamp score server-side — never trust raw client value
+    const safeScore = Math.min(100, Math.max(0, Number(score) || 0));
+    const serverCorrect = safeScore >= 70;
+    const xpEarned = Math.min(50, Math.round(safeScore / 2));
 
     // Find task in DB (may not exist if using static data)
     const task = await db.practiceTask.findUnique({ where: { id: taskId } }).catch(() => null);
@@ -24,9 +29,9 @@ export async function POST(req: NextRequest) {
           userId: session.user.id,
           taskId: task.id,
           answer: answer ? JSON.parse(JSON.stringify(answer)) : {},
-          score,
+          score: safeScore,
           timeSpent: timeSpent ?? 0,
-          isCorrect: correct ?? score >= 70,
+          isCorrect: serverCorrect,
         },
       });
 

@@ -1,26 +1,11 @@
 import OpenAI from "openai";
 import { QuestionType } from "@prisma/client";
 
-// Provider priority: GEMINI_API_KEY → GROQ_API_KEY → OPENAI_API_KEY
-const isGemini = !!process.env.GEMINI_API_KEY;
-const isGroq = !isGemini && !!process.env.GROQ_API_KEY;
-
 const openai = new OpenAI({
-  apiKey: isGemini
-    ? process.env.GEMINI_API_KEY
-    : isGroq
-    ? process.env.GROQ_API_KEY
-    : process.env.OPENAI_API_KEY,
-  baseURL: isGemini
-    ? "https://generativelanguage.googleapis.com/v1beta/openai/"
-    : isGroq
-    ? "https://api.groq.com/openai/v1"
-    : undefined,
+  apiKey: process.env.OPENAI_API_KEY,
 });
 
-const MODEL =
-  process.env.AI_MODEL ||
-  (isGemini ? "gemini-2.0-flash" : isGroq ? "llama-3.3-70b-versatile" : "gpt-4o");
+const MODEL = process.env.AI_MODEL || "gpt-4o";
 
 // ============================================
 // QUESTION GENERATION
@@ -61,24 +46,26 @@ Allowed question types: ${allowedTypes}
 
 ${context ? `Additional context: ${context}` : ""}
 
-Return a JSON array with this exact structure:
-[
-  {
-    "type": "QUESTION_TYPE",
-    "title": "Question text here",
-    "description": "Optional helper text",
-    "options": [
-      {"id": "opt1", "text": "Option text", "isCorrect": false},
-      {"id": "opt2", "text": "Option text", "isCorrect": true}
-    ],
-    "minValue": null,
-    "maxValue": null,
-    "correctAnswer": null,
-    "scoringEnabled": true,
-    "maxScore": 10,
-    "aiTags": ["tag1", "tag2"]
-  }
-]
+Return a JSON object with this exact structure:
+{
+  "questions": [
+    {
+      "type": "QUESTION_TYPE",
+      "title": "Question text here",
+      "description": "Optional helper text",
+      "options": [
+        {"id": "opt1", "text": "Option text", "isCorrect": false},
+        {"id": "opt2", "text": "Option text", "isCorrect": true}
+      ],
+      "minValue": null,
+      "maxValue": null,
+      "correctAnswer": null,
+      "scoringEnabled": true,
+      "maxScore": 10,
+      "aiTags": ["tag1", "tag2"]
+    }
+  ]
+}
 
 Rules:
 - Multiple/single choice questions must have 4 options with at least 1 correct
@@ -107,7 +94,11 @@ Rules:
 
   try {
     const parsed = JSON.parse(content);
-    return Array.isArray(parsed) ? parsed : parsed.questions || [];
+    if (Array.isArray(parsed)) return parsed;
+    if (Array.isArray(parsed.questions)) return parsed.questions;
+    // fallback: find the first array-valued key
+    const arrayVal = Object.values(parsed).find((v) => Array.isArray(v));
+    return (arrayVal as GeneratedQuestion[]) || [];
   } catch {
     return [];
   }

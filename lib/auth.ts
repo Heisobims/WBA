@@ -77,15 +77,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async signIn({ user, account }) {
       if (account?.provider === "google" || account?.provider === "github") {
         if (user.email) {
-          const existing = await db.user.findUnique({
-            where: { email: user.email },
-          });
-          if (!existing) {
-            await db.user.update({
-              where: { email: user.email },
-              data: { emailVerified: new Date(), status: "ACTIVE" },
-            });
-          }
+          // updateMany is safe here — runs after adapter creates the user,
+          // and only patches rows where emailVerified is still null
+          await db.user.updateMany({
+            where: { email: user.email, emailVerified: null },
+            data: { emailVerified: new Date(), status: "ACTIVE" },
+          }).catch(() => {});
         }
       }
       return true;
