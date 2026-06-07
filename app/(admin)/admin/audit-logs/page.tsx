@@ -8,19 +8,20 @@ export const metadata = { title: "Admin - Audit Logs" };
 export default async function AuditLogsPage({
   searchParams,
 }: {
-  searchParams: { page?: string; action?: string; resource?: string };
+  searchParams: Promise<{ page?: string; action?: string; resource?: string }>;
 }) {
   const session = await auth();
   if (!session || !["SUPER_ADMIN", "ADMIN"].includes(session.user.role)) {
     redirect("/dashboard");
   }
 
-  const page = parseInt(searchParams.page || "1");
+  const sp = await searchParams;
+  const page = parseInt(sp.page || "1");
   const limit = 50;
 
   const where: any = {};
-  if (searchParams.action) where.action = searchParams.action;
-  if (searchParams.resource) where.resource = searchParams.resource;
+  if (sp.action) where.action = sp.action;
+  if (sp.resource) where.resource = sp.resource;
 
   const [logs, total] = await Promise.all([
     db.auditLog.findMany({

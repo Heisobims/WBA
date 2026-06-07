@@ -8,26 +8,27 @@ export const metadata = { title: "Admin - Users" };
 export default async function AdminUsersPage({
   searchParams,
 }: {
-  searchParams: { search?: string; role?: string; status?: string; page?: string };
+  searchParams: Promise<{ search?: string; role?: string; status?: string; page?: string }>;
 }) {
   const session = await auth();
   if (!session || !["SUPER_ADMIN", "ADMIN"].includes(session.user.role)) {
     redirect("/dashboard");
   }
 
-  const page = parseInt(searchParams.page || "1");
+  const sp = await searchParams;
+  const page = parseInt(sp.page || "1");
   const limit = 20;
   const skip = (page - 1) * limit;
 
   const where = {
-    ...(searchParams.search && {
+    ...(sp.search && {
       OR: [
-        { name: { contains: searchParams.search, mode: "insensitive" as const } },
-        { email: { contains: searchParams.search, mode: "insensitive" as const } },
+        { name: { contains: sp.search, mode: "insensitive" as const } },
+        { email: { contains: sp.search, mode: "insensitive" as const } },
       ],
     }),
-    ...(searchParams.role && { role: searchParams.role as any }),
-    ...(searchParams.status && { status: searchParams.status as any }),
+    ...(sp.role && { role: sp.role as any }),
+    ...(sp.status && { status: sp.status as any }),
   };
 
   const [users, total] = await Promise.all([

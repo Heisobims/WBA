@@ -3,9 +3,10 @@ import { db } from "@/lib/db";
 import { redirect, notFound } from "next/navigation";
 import { QuestionnairePlayerShell } from "@/components/questionnaire/player/questionnaire-player-shell";
 
-export async function generateMetadata({ params }: { params: { id: string } }) {
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const q = await db.questionnaire.findUnique({
-    where: { id: params.id },
+    where: { id },
     select: { title: true, description: true },
   });
   return { title: q?.title || "Questionnaire", description: q?.description };
@@ -14,13 +15,14 @@ export async function generateMetadata({ params }: { params: { id: string } }) {
 export default async function PlayQuestionnairePage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
+  const { id } = await params;
   const session = await auth();
-  if (!session) redirect(`/login?callbackUrl=/questionnaires/play/${params.id}`);
+  if (!session) redirect(`/login?callbackUrl=/questionnaires/play/${id}`);
 
   const questionnaire = await db.questionnaire.findUnique({
-    where: { id: params.id },
+    where: { id },
     include: {
       questions: { orderBy: { order: "asc" } },
       author: { select: { id: true, name: true } },
@@ -41,13 +43,13 @@ export default async function PlayQuestionnairePage({
   if (questionnaire.maxAttempts) {
     const attempts = await db.response.count({
       where: {
-        questionnaireId: params.id,
+        questionnaireId: id,
         userId: session.user.id,
         status: "COMPLETED",
       },
     });
     if (attempts >= questionnaire.maxAttempts) {
-      redirect(`/questionnaires/${params.id}?error=max-attempts`);
+      redirect(`/questionnaires/${id}?error=max-attempts`);
     }
   }
 

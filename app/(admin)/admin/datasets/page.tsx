@@ -8,14 +8,15 @@ export const metadata = { title: "Admin - Datasets" };
 export default async function AdminDatasetsPage({
   searchParams,
 }: {
-  searchParams: { page?: string };
+  searchParams: Promise<{ page?: string }>;
 }) {
   const session = await auth();
   if (!session || !["SUPER_ADMIN", "ADMIN", "AI_TRAINER"].includes(session.user.role)) {
     redirect("/dashboard");
   }
 
-  const page = parseInt(searchParams.page || "1");
+  const sp = await searchParams;
+  const page = parseInt(sp.page || "1");
   const limit = 20;
 
   const [datasets, total, questionnaires] = await Promise.all([

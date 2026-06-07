@@ -8,19 +8,20 @@ export const metadata = { title: "Admin - Questionnaires" };
 export default async function AdminQuestionnairesPage({
   searchParams,
 }: {
-  searchParams: { page?: string; status?: string; search?: string };
+  searchParams: Promise<{ page?: string; status?: string; search?: string }>;
 }) {
   const session = await auth();
   if (!session || !["SUPER_ADMIN", "ADMIN"].includes(session.user.role)) {
     redirect("/dashboard");
   }
 
-  const page = parseInt(searchParams.page || "1");
+  const sp = await searchParams;
+  const page = parseInt(sp.page || "1");
   const limit = 20;
 
   const where: any = {};
-  if (searchParams.search) where.title = { contains: searchParams.search, mode: "insensitive" };
-  if (searchParams.status) where.status = searchParams.status;
+  if (sp.search) where.title = { contains: sp.search, mode: "insensitive" };
+  if (sp.status) where.status = sp.status;
 
   const [questionnaires, total] = await Promise.all([
     db.questionnaire.findMany({
